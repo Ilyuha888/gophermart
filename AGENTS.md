@@ -62,9 +62,14 @@ After a template update (see `README.md`), re-check that the Test step still set
 
 ## Git
 
-- One branch and one pull request per step of the plan, as a stack: PR 1 targets `master`,
-  each next PR targets the previous branch. The course reviewer reviews the top PR.
-- Do not merge. The owner merges the whole stack after the course reviewer accepts it, with a
+Two stacks of pull requests.
+
+- Docs stack: `pr01-docs` targets `master`, `pr02-plan` targets `pr01-docs`. The owner merges it
+  into `master` himself.
+- Code stack: seven PRs, C1 to C7, in [docs/PLAN.md](docs/PLAN.md) with the scope and acceptance
+  criteria of each. C1 branches off `master` and targets it; each next PR branches off and
+  targets the previous one. The course reviewer reviews the top PR.
+- Do not merge. The owner merges the whole code stack after the course accepts it, with a
   merge commit, never squash. Fix a pushed lower branch with new commits only.
 - Commit subject only, English, imperative.
 

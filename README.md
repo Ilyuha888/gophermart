@@ -12,7 +12,9 @@ decided; the code arrives in a stack of pull requests.
 
 Interactive design page, with a step-by-step walk through every request:
 [docs/index.html](docs/index.html) (source in the repo), also served at
-<https://ilyuha888.github.io/gophermart/> once the stack is merged to `master`.
+<https://ilyuha888.github.io/gophermart/> once the docs are merged to `master`.
+
+The order of the code pull requests and what each must pass: [docs/PLAN.md](docs/PLAN.md).
 
 ## Who does what
 
