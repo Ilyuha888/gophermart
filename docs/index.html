@@ -1,0 +1,529 @@
+<!doctype html>
+<!-- AI-log: page written by an agent (Claude); the owner made every decision on it and reviewed the page. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gophermart — how it works</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #5d636e; --line: #c9ccd2;
+  --box: #ffffff; --box-ink: #1d1f23; --grp: #eef0f3;
+  --on: #1f6feb; --on-bg: #e3edff; --ok: #1a7f37; --warn: #b35900; --bad: #c0392b;
+  --code: #f0f1f3;
+}
+:root[data-theme="dark"] {
+  --bg: #15171b; --panel: #1d2026; --ink: #e6e8eb; --muted: #9aa1ad; --line: #3a3f48;
+  --box: #22262d; --box-ink: #e6e8eb; --grp: #1a1d22;
+  --on: #5b9dff; --on-bg: #1c2d4a; --ok: #4cc26b; --warn: #f0a050; --bad: #ff7b6b;
+  --code: #262a31;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171b; --panel: #1d2026; --ink: #e6e8eb; --muted: #9aa1ad; --line: #3a3f48;
+    --box: #22262d; --box-ink: #e6e8eb; --grp: #1a1d22;
+    --on: #5b9dff; --on-bg: #1c2d4a; --ok: #4cc26b; --warn: #f0a050; --bad: #ff7b6b;
+    --code: #262a31;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+header { padding: 16px 20px 8px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+header h1 { font-size: 20px; margin: 0; }
+header .sub { color: var(--muted); font-size: 13px; }
+header button { margin-left: auto; }
+nav.tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+nav.tabs button { border: 0; background: none; color: var(--muted); padding: 8px 12px; font: inherit; cursor: pointer;
+  border-bottom: 2px solid transparent; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--on); font-weight: 600; }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+section.tab { display: none; padding: 16px 20px 32px; }
+section.tab.active { display: block; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+code { background: var(--code); padding: 1px 4px; border-radius: 4px; }
+
+/* scheme */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; }
+#board { position: relative; display: grid; gap: 14px 28px;
+  grid-template-columns: 1fr 2.4fr 1.2fr; grid-template-areas:
+  "client app ext" ". pg ."; }
+#pgwrap { grid-area: pg; display: flex; justify-content: flex-start; }
+#pgwrap .box { width: 50%; margin-left: 12px; }
+#extcol { justify-content: flex-end; padding-bottom: 40px; }
+#base { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+.col { display: flex; flex-direction: column; gap: 30px; justify-content: center; }
+.group { background: var(--grp); border: 1px dashed var(--line); border-radius: 10px; padding: 26px 12px 12px; position: relative; }
+.group > .glabel { position: absolute; top: 6px; left: 12px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.app-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px 22px; }
+.stack { display: flex; flex-direction: column; gap: 30px; }
+.box { background: var(--box); color: var(--box-ink); border: 1.5px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; position: relative; z-index: 1; transition: border-color .15s, background .15s, box-shadow .15s; }
+.box b { display: block; font-size: 14px; }
+.box .pkg { font-size: 11.5px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+.box .what { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.box.on { border-color: var(--on); background: var(--on-bg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 25%, transparent); }
+.box.ext { border-style: solid; }
+.box.db { border-radius: 8px 8px 14px 14px; }
+.tag { display: inline-block; font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--warn);
+  color: var(--warn); margin-left: 4px; vertical-align: 1px; font-weight: 600; }
+svg .edge { stroke: var(--line); stroke-width: 1.4; fill: none; }
+svg .edge.on { stroke: var(--on); stroke-width: 2.6; }
+svg .elabel { fill: #fff; font: 600 12px ui-monospace, Menlo, monospace; }
+svg .lbg { fill: var(--on); rx: 4; }
+#stepEdge { font: 12.5px ui-monospace, Menlo, monospace; color: var(--on); margin: 2px 0 6px; }
+
+aside.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  align-self: start; position: sticky; top: 8px; }
+.scen { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.scen button[aria-pressed="true"] { border-color: var(--on); background: var(--on-bg); font-weight: 600; }
+.stepnav { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.stepnav .count { color: var(--muted); font-size: 13px; }
+#stepTitle { font-weight: 700; margin: 6px 0 4px; }
+#stepText { font-size: 14px; }
+#stepText .r { font-weight: 700; }
+#stepText .ok { color: var(--ok); } #stepText .warn { color: var(--warn); } #stepText .bad { color: var(--bad); }
+ol.steps { padding-left: 20px; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+ol.steps li { cursor: pointer; padding: 1px 0; }
+ol.steps li.cur { color: var(--ink); font-weight: 600; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* tables */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card h3 { margin: 0 0 8px; font-size: 15px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.status { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+.dec td:first-child { font-weight: 700; white-space: nowrap; }
+.st-dec { color: var(--ok); font-weight: 600; } .st-prop { color: var(--warn); font-weight: 600; } .st-open { color: var(--bad); font-weight: 600; }
+
+/* business */
+.lead { font-size: 16px; max-width: 900px; }
+.actors { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0 6px; }
+.actor { background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.actor p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.actor .icon { font-size: 24px; }
+.actor.ours { border-color: var(--on); background: var(--on-bg); }
+.actor.dim { border-style: dashed; }
+ol.journey { list-style: none; padding: 0; margin: 8px 0 18px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+ol.journey li { background: var(--panel); border: 1.5px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; position: relative; }
+ol.journey li.ours { border-color: var(--on); }
+ol.journey li.dim { border-style: dashed; opacity: .8; }
+ol.journey li span:not(.n) { color: var(--muted); }
+ol.journey li em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); margin-top: auto; }
+ol.journey li.ours em { color: var(--on); }
+ol.journey .n { font: 700 12px ui-monospace, Menlo, monospace; color: var(--on); }
+@media (max-width: 980px) { ol.journey { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { ol.journey { grid-template-columns: 1fr; } }
+
+/* lifecycle */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.pill { border: 1.5px solid var(--line); border-radius: 999px; padding: 3px 12px; font: 600 13px ui-monospace, Menlo, monospace; background: var(--box); }
+.pill.final { border-color: var(--ok); }
+.arrow { color: var(--muted); }
+
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.panel { position: static; order: -1; }
+}
+@media (max-width: 640px) {
+  #board { grid-template-columns: 1fr; grid-template-areas: "client" "app" "pg" "ext"; }
+  #pgwrap .box { width: 100%; margin-left: 0; }
+  #extcol { padding-bottom: 0; }
+  .app-grid { grid-template-columns: 1fr; }
+  #base { display: none; }
+  header button { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Gophermart — how it works</h1>
+  <span class="sub">Loyalty points service. The design as decided on 2026-11-27; the code follows it PR by PR.</span>
+  <button id="theme" type="button">Theme</button>
+</header>
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-tab="t-biz">Business</button>
+  <button role="tab" aria-selected="false" data-tab="t-scheme">Scheme & scenarios</button>
+  <button role="tab" aria-selected="false" data-tab="t-data">Data</button>
+  <button role="tab" aria-selected="false" data-tab="t-dec">Decisions</button>
+</nav>
+
+<section class="tab active" id="t-biz">
+  <p class="lead">A shop wants its regular buyers to come back. Each purchase earns <b>points</b>; points pay for later purchases, <b>1 point = 1 unit of local currency</b>. Gophermart is the buyer's points account: it knows whose order is whose, how many points each order earned, and how many were spent.</p>
+  <div class="actors">
+    <div class="actor"><div class="icon">🧑</div><b>Buyer</b><p>Registers in Gophermart, buys in the shop, hands Gophermart the number of the order, spends points.</p></div>
+    <div class="actor dim"><div class="icon">🛒</div><b>Online shop</b><p>Sells and issues order numbers. Not built here: the task treats it as given.</p></div>
+    <div class="actor dim"><div class="icon">🧮</div><b>Accrual system</b><p><i>Accrual</i> means the points credited for an order. This system is the shop's calculator: it decides how many points an order earns, by rules that may change any time, and tells only the number, not why. It takes its time and limits how often we may ask. Given as a binary.</p></div>
+    <div class="actor ours"><div class="icon">🐹</div><b>Gophermart (we build)</b><p>Links order numbers to buyers, asks the accrual system about each order until it has an answer, keeps the balance, records spending.</p></div>
+  </div>
+  <h3>The journey</h3>
+  <ol class="journey">
+    <li class="ours"><span class="n">1</span><b>Register</b><span>The buyer gets a Gophermart account.</span><em>ours</em></li>
+    <li class="dim"><span class="n">2</span><b>Buy in the shop</b><span>An order with a number.</span><em>assumed, not built</em></li>
+    <li class="dim"><span class="n">3</span><b>Order reaches accrual</b><span>The shop passes it to the calculator.</span><em>accrual system's job</em></li>
+    <li class="ours"><span class="n">4</span><b>Upload the number</b><span>The buyer tells Gophermart “this order is mine”. Only now does the order have an owner on our side.</span><em>ours</em></li>
+    <li class="ours"><span class="n">5</span><b>Check with accrual</b><span>Gophermart keeps asking until the answer is final: points, or none.</span><em>ours</em></li>
+    <li class="ours"><span class="n">6</span><b>Credit points</b><span>A positive answer adds points to the balance.</span><em>ours</em></li>
+    <li class="ours"><span class="n">7</span><b>Spend points</b><span>The buyer pays part or all of a new order with points.</span><em>ours</em></li>
+  </ol>
+  <div class="cards">
+    <div class="card"><h3>Worked example</h3>
+      <table>
+        <tr><th>what happens</th><th>current</th><th>withdrawn</th></tr>
+        <tr><td>registers</td><td>0</td><td>0</td></tr>
+        <tr><td>uploads order 9278923470 → NEW</td><td>0</td><td>0</td></tr>
+        <tr><td>accrual: PROCESSED, 500 points</td><td>500</td><td>0</td></tr>
+        <tr><td>uploads 346436439 → accrual: INVALID</td><td>500</td><td>0</td></tr>
+        <tr><td>spends 42 on new order 2377225624</td><td>458</td><td>42</td></tr>
+        <tr><td>tries to spend 1000</td><td colspan="2">refused, 402: not enough points</td></tr>
+      </table></div>
+    <div class="card"><h3>Words used on the other tabs</h3>
+      <table>
+        <tr><td><b>accrual</b></td><td>points credited for one order</td></tr>
+        <tr><td><b>withdrawal</b></td><td>points spent on a new order</td></tr>
+        <tr><td><b>current</b></td><td>points available now</td></tr>
+        <tr><td><b>withdrawn</b></td><td>points spent since registration</td></tr>
+        <tr><td><b>order number</b></td><td>digits of any length; the last digit is a Luhn check digit, which catches most typos</td></tr>
+        <tr><td><b>final status</b></td><td>INVALID or PROCESSED: the accrual system will not change its answer</td></tr>
+      </table></div>
+  </div>
+</section>
+
+<section class="tab" id="t-scheme">
+  <div class="layout">
+    <div id="board">
+      <svg id="base" aria-hidden="true"></svg>
+      <svg id="edges" aria-hidden="true">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--on)"></path>
+          </marker>
+        </defs>
+      </svg>
+      <div class="col" style="grid-area: client">
+        <div class="box ext" id="client"><b>Client</b><div class="what">browser, curl, autotests; keeps the auth cookie</div></div>
+      </div>
+      <div style="grid-area: app">
+        <div class="group">
+          <span class="glabel">gophermart process · cmd/gophermart</span>
+          <div class="app-grid">
+            <div class="stack">
+              <div class="box" id="mw"><b>Router + middleware</b><span class="pkg">chi · internal/handler</span>
+                <div class="what">gzip · request log · auth: cookie → JWT → user id in the request context</div></div>
+              <div class="box" id="handler"><b>Handlers</b><span class="pkg">internal/handler</span>
+                <div class="what">decode JSON or text, map errors to HTTP codes, encode answers</div></div>
+              <div class="box" id="service"><b>Service</b><span class="pkg">internal/service</span>
+                <div class="what">the rules: Luhn, password hash, JWT, “enough points?”</div></div>
+              <div class="box" id="storage"><b>Storage</b><span class="pkg">internal/storage</span>
+                <div class="what">SQL over pgx; transactions; goose migrations</div></div>
+            </div>
+            <div class="stack">
+              <div class="box" id="config"><b>main + config</b><span class="pkg">cmd/gophermart</span>
+                <div class="what"><code>-a</code> RUN_ADDRESS · <code>-d</code> DATABASE_URI · <code>-r</code> ACCRUAL_SYSTEM_ADDRESS; signal → stop</div></div>
+              <div class="box" id="poller"><b>Accrual poller</b><span class="pkg">internal/accrual</span>
+                <div class="what">ticker → pick orders NEW / PROCESSING from the DB → worker pool; 429 pauses all workers</div></div>
+              <div class="box" id="aclient"><b>Accrual client</b><span class="pkg">internal/accrual</span>
+                <div class="what">GET /api/orders/{number}; reads Retry-After</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="pgwrap">
+        <div class="box db" id="pg"><b>PostgreSQL</b><div class="what">users · orders · withdrawals</div></div>
+      </div>
+      <div class="col" id="extcol" style="grid-area: ext">
+        <div class="box ext" id="accrual"><b>Accrual system</b><span class="pkg">cmd/accrual (binary from the template)</span>
+          <div class="what">black box: points per order; may answer 429</div></div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="scen" id="scen"></div>
+      <div class="stepnav">
+        <button id="prev" type="button" aria-label="Previous step">◀</button>
+        <button id="next" type="button" aria-label="Next step">▶</button>
+        <span class="count" id="count"></span>
+      </div>
+      <div id="stepTitle"></div>
+      <div id="stepEdge"></div>
+      <div id="stepText"></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="hint">Keys: ← → step, 1–9 scenario.</div>
+    </aside>
+  </div>
+</section>
+
+<section class="tab" id="t-data">
+  <p>Points are stored as whole hundredths in <code>BIGINT</code> (D5): 500.5 points = 50050. JSON shows them as numbers with a fraction; the conversion happens at the edges (handler, accrual client).</p>
+  <div class="cards">
+    <div class="card"><h3>users</h3><table>
+      <tr><th>column</th><th>type</th><th>why</th></tr>
+      <tr><td>id</td><td class="mono">bigserial PK</td><td>goes into the JWT</td></tr>
+      <tr><td>login</td><td class="mono">text UNIQUE</td><td>a duplicate → 409 on register</td></tr>
+      <tr><td>password_hash</td><td class="mono">text</td><td>bcrypt (D7)</td></tr>
+      <tr><td>created_at</td><td class="mono">timestamptz</td><td></td></tr>
+    </table><p class="hint">Row locked (<code>SELECT … FOR UPDATE</code>) during a withdrawal, so two withdrawals of one user run one after another (D4).</p></div>
+    <div class="card"><h3>orders</h3><table>
+      <tr><th>column</th><th>type</th><th>why</th></tr>
+      <tr><td>number</td><td class="mono">text PK</td><td>digits of any length; numbers never repeat</td></tr>
+      <tr><td>user_id</td><td class="mono">bigint FK</td><td>whose order; 200 vs 409 on a repeat upload</td></tr>
+      <tr><td>status</td><td class="mono">text</td><td>NEW · PROCESSING · INVALID · PROCESSED</td></tr>
+      <tr><td>accrual</td><td class="mono">bigint NULL</td><td>hundredths; NULL = no points, field left out of JSON</td></tr>
+      <tr><td>uploaded_at</td><td class="mono">timestamptz</td><td>list order, newest first</td></tr>
+    </table><p class="hint">Indexes: (user_id, uploaded_at DESC) for the list and the balance sum; status in NEW/PROCESSING for the poller.</p></div>
+    <div class="card"><h3>withdrawals</h3><table>
+      <tr><th>column</th><th>type</th><th>why</th></tr>
+      <tr><td>id</td><td class="mono">bigserial PK</td><td></td></tr>
+      <tr><td>user_id</td><td class="mono">bigint FK</td><td></td></tr>
+      <tr><td>order_number</td><td class="mono">text</td><td>UNIQUE (D11): a repeat → 422</td></tr>
+      <tr><td>sum</td><td class="mono">bigint</td><td>hundredths, &gt; 0</td></tr>
+      <tr><td>processed_at</td><td class="mono">timestamptz</td><td>list order, newest first</td></tr>
+    </table><p class="hint">Index: (user_id, processed_at DESC).</p></div>
+    <div class="card"><h3>Balance (computed, D4)</h3>
+      <p class="mono" style="margin:4px 0">current = Σ orders.accrual (PROCESSED) − Σ withdrawals.sum<br>withdrawn = Σ withdrawals.sum</p>
+      <p class="hint">Measured on local Postgres: 0.87 ms for a user with 100 orders, 18 ms with 100 000 (research/balance-cost.sql).</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Order status: ours vs the accrual system's (D10)</h3>
+    <div class="flow"><span class="pill">NEW</span><span class="arrow">→</span><span class="pill">PROCESSING</span><span class="arrow">→</span><span class="pill final">INVALID</span><span class="arrow">or</span><span class="pill final">PROCESSED</span></div>
+    <table>
+      <tr><th>accrual answers</th><th>our order becomes</th><th>polled again?</th></tr>
+      <tr><td>204 not registered yet</td><td class="status">NEW (unchanged)</td><td>yes, next tick</td></tr>
+      <tr><td>200 REGISTERED</td><td class="status">PROCESSING</td><td>yes</td></tr>
+      <tr><td>200 PROCESSING</td><td class="status">PROCESSING</td><td>yes</td></tr>
+      <tr><td>200 INVALID</td><td class="status">INVALID</td><td>no, final</td></tr>
+      <tr><td>200 PROCESSED (+ accrual)</td><td class="status">PROCESSED, accrual saved</td><td>no, final</td></tr>
+      <tr><td>429 + Retry-After</td><td class="status">unchanged</td><td>whole pool waits Retry-After seconds</td></tr>
+      <tr><td>500 or network error</td><td class="status">unchanged</td><td>yes, next tick</td></tr>
+    </table></div>
+</section>
+
+<section class="tab" id="t-dec">
+  <div class="card"><table class="dec">
+    <tr><th>#</th><th>question</th><th>answer</th><th>state</th></tr>
+    <tr><td>D1</td><td>Layers</td><td>handler → service → storage</td><td class="st-dec">decided</td></tr>
+    <tr><td>D2</td><td>Authentication</td><td>JWT in a cookie, 24 h, checked by signature only; logout later (beyond the task)</td><td class="st-dec">decided</td></tr>
+    <tr><td>D3</td><td>Accrual polling</td><td>the DB is the queue: ticker + worker pool; 429 pauses the whole pool</td><td class="st-dec">decided</td></tr>
+    <tr><td>D4</td><td>Balance</td><td>computed from sums; user row locked on withdraw</td><td class="st-dec">decided</td></tr>
+    <tr><td>D5</td><td>Money in the DB</td><td>BIGINT hundredths (alt: NUMERIC(12,2); float drifts)</td><td class="st-dec">decided</td></tr>
+    <tr><td>D6</td><td>Repository</td><td>public Ilyuha888/gophermart from the course template</td><td class="st-dec">decided</td></tr>
+    <tr><td>D7</td><td>Password hash</td><td>bcrypt from golang.org/x/crypto (alt: argon2, same module)</td><td class="st-dec">decided</td></tr>
+    <tr><td>D8</td><td>Code from metrics-alerting</td><td>port by hand what is needed: logger, gzip, retry, flag parsing, goose migrations</td><td class="st-dec">decided</td></tr>
+    <tr><td>D9</td><td>CI branch rules</td><td>read in the workflows: they run on any pull request and on pushes to main/master; no branch-name rule</td><td class="st-dec">decided</td></tr>
+    <tr><td>D10</td><td>Status mapping</td><td>table on the Data tab</td><td class="st-dec">decided</td></tr>
+    <tr><td>D11</td><td>Withdrawal order number</td><td>unique; a repeat gets 422</td><td class="st-dec">decided</td></tr>
+    <tr><td>D12</td><td>Withdraw: bad JSON or sum ≤ 0</td><td>400; 422 only for the order number</td><td class="st-dec">decided</td></tr>
+    <tr><td>D13</td><td>Package names</td><td>internal/handler, service, storage, accrual, as on the scheme</td><td class="st-dec">decided</td></tr>
+    <tr><td>D14</td><td>JWT secret</td><td>required env var <code>JWT_SECRET</code>; the service does not start without it. CI will pass it in the Test step of the gophermart workflow, added with the auth code</td><td class="st-dec">decided</td></tr>
+  </table></div>
+  <div class="card" style="margin-top:14px"><h3>Beyond the task (out by default)</h3>
+    <ul><li>Logout: <code>token_version</code> in users + <code>POST /api/user/logout</code> (D2).</li>
+    <li>Integration tests against a real DB and the accrual binary: listed as optional in the task.</li></ul></div>
+</section>
+
+<script>
+const S = (t) => t; // marker for step text with inline HTML
+const scenarios = [
+  { name: "Register", steps: [
+    { on: ["client","mw"], edge: ["client","mw","POST /api/user/register"], title: "Request arrives",
+      text: S("JSON <code>{login, password}</code>, maybe gzipped. Middleware unzips and logs. Register and login skip the auth check.") },
+    { on: ["handler"], edge: ["mw","handler"], title: "Handler decodes",
+      text: S("Bad JSON or an empty login/password → <span class='r bad'>400</span>.") },
+    { on: ["service"], edge: ["handler","service","Register(login, pw)"], title: "Service hashes the password",
+      text: S("bcrypt (D7). The plain password never reaches storage.") },
+    { on: ["storage","pg"], edge: ["storage","pg","INSERT users"], title: "Storage inserts the user",
+      text: S("Unique violation on login (pg code 23505) → storage returns its own <code>ErrLoginTaken</code> → handler <span class='r warn'>409</span>.") },
+    { on: ["service"], edge: ["storage","service","user id"], title: "Service issues a JWT",
+      text: S("Claims: user id, expires in 24 h; signed with the secret from a required env var (D14).") },
+    { on: ["handler","client"], edge: ["handler","client","200 + Set-Cookie"], title: "Logged in right away",
+      text: S("<span class='r ok'>200</span> with the token in an HttpOnly cookie. The task wants register to authenticate too.") },
+  ]},
+  { name: "Login", steps: [
+    { on: ["client","mw","handler"], edge: ["client","mw","POST /api/user/login"], title: "Request",
+      text: S("Same body as register. Bad format → <span class='r bad'>400</span>.") },
+    { on: ["service","storage","pg"], edge: ["storage","pg","SELECT by login"], title: "Find the user",
+      text: S("No such login → <span class='r warn'>401</span>. Same code as a wrong password, so a caller cannot probe logins.") },
+    { on: ["service"], edge: ["pg","service","hash"], title: "Compare the password",
+      text: S("bcrypt compares the hash. Mismatch → <span class='r warn'>401</span>.") },
+    { on: ["handler","client"], edge: ["handler","client","200 + Set-Cookie"], title: "New JWT in the cookie",
+      text: S("<span class='r ok'>200</span>.") },
+  ]},
+  { name: "Upload order", steps: [
+    { on: ["client","mw"], edge: ["client","mw","POST /api/user/orders"], title: "Auth middleware",
+      text: S("Reads the cookie, checks the JWT signature and expiry, puts the user id into the request context. No cookie or a bad token → <span class='r warn'>401</span>.") },
+    { on: ["handler"], edge: ["mw","handler"], title: "Read the number",
+      text: S("Plain-text body. Empty body → <span class='r bad'>400</span>.") },
+    { on: ["service"], edge: ["handler","service","Upload(user, number)"], title: "Luhn check",
+      text: S("Not digits or fails Luhn → <span class='r warn'>422</span>.") },
+    { on: ["storage","pg"], edge: ["storage","pg","INSERT … ON CONFLICT DO NOTHING"], title: "Insert as NEW",
+      text: S("A new row means a new order. No row inserted means the number exists; storage reads its owner.") },
+    { on: ["handler","client"], edge: ["handler","client","202 / 200 / 409"], title: "Answer",
+      text: S("New → <span class='r ok'>202</span>. Already uploaded by this user → <span class='r ok'>200</span>. By another user → <span class='r warn'>409</span>. The poller will pick the NEW order up; the request does not wait for it.") },
+  ]},
+  { name: "Accrual poller", steps: [
+    { on: ["config","poller"], edge: ["config","poller","start(ctx)"], title: "Started by main",
+      text: S("Runs beside the HTTP server until the signal cancels its context.") },
+    { on: ["poller","storage","pg"], edge: ["poller","storage","pick NEW/PROCESSING"], title: "Tick: take a batch",
+      text: S("Oldest non-final orders first, a limited batch. The DB is the queue (D3): a restart loses nothing.") },
+    { on: ["poller","aclient"], edge: ["poller","aclient","job → worker"], title: "Workers",
+      text: S("A fixed pool of workers, each asks about one order at a time.") },
+    { on: ["aclient","accrual"], edge: ["aclient","accrual","GET /api/orders/{n}"], title: "Ask the accrual system",
+      text: S("<span class='r ok'>200</span>: status (+ accrual). <span class='r'>204</span>: not registered yet, stays NEW. <span class='r bad'>500</span> or network error: try next tick.") },
+    { on: ["aclient","poller"], edge: ["accrual","aclient","429 Retry-After: 60"], title: "Too many requests",
+      text: S("<span class='r warn'>429</span>: the whole pool pauses for Retry-After seconds, not just this worker; the limit is per service.") },
+    { on: ["poller","storage","pg"], edge: ["poller","storage","UPDATE status, accrual"], title: "Save the result",
+      text: S("Mapping on the Data tab (D10). INVALID and PROCESSED are final and leave the queue.") },
+  ]},
+  { name: "List orders", steps: [
+    { on: ["client","mw","handler"], edge: ["client","mw","GET /api/user/orders"], title: "Authenticated request",
+      text: S("No valid cookie → <span class='r warn'>401</span>.") },
+    { on: ["service","storage","pg"], edge: ["storage","pg","SELECT … ORDER BY uploaded_at DESC"], title: "Read the user's orders",
+      text: S("Newest first.") },
+    { on: ["handler","client"], edge: ["handler","client","200 / 204"], title: "Answer",
+      text: S("None → <span class='r'>204</span>. Else <span class='r ok'>200</span>, JSON list; <code>uploaded_at</code> in RFC3339; <code>accrual</code> only when there are points.") },
+  ]},
+  { name: "Balance", steps: [
+    { on: ["client","mw","handler"], edge: ["client","mw","GET /api/user/balance"], title: "Authenticated request",
+      text: S("No valid cookie → <span class='r warn'>401</span>.") },
+    { on: ["storage","pg"], edge: ["storage","pg","SUM accruals, SUM withdrawals"], title: "Compute (D4)",
+      text: S("current = accruals − withdrawals; withdrawn = withdrawals.") },
+    { on: ["handler","client"], edge: ["handler","client","200 {current, withdrawn}"], title: "Answer",
+      text: S("Hundredths turn back into numbers like 500.5.") },
+  ]},
+  { name: "Withdraw", steps: [
+    { on: ["client","mw","handler"], edge: ["client","mw","POST …/balance/withdraw"], title: "Authenticated request",
+      text: S("JSON <code>{order, sum}</code>. No valid cookie → <span class='r warn'>401</span>.") },
+    { on: ["service"], edge: ["handler","service","Withdraw(user, order, sum)"], title: "Check the order number",
+      text: S("Fails Luhn → <span class='r warn'>422</span>. Bad JSON or sum ≤ 0 → <span class='r bad'>400</span>.") },
+    { on: ["storage","pg"], edge: ["storage","pg","BEGIN; SELECT users … FOR UPDATE"], title: "Lock the user",
+      text: S("A second withdrawal of the same user waits here until the first commits, so both cannot spend the same points.") },
+    { on: ["storage","pg"], edge: ["storage","pg","SUM … ; INSERT withdrawal; COMMIT"], title: "Enough points?",
+      text: S("Balance computed inside the transaction. Not enough → rollback, <span class='r warn'>402</span>.") },
+    { on: ["handler","client"], edge: ["handler","client","200"], title: "Done",
+      text: S("<span class='r ok'>200</span>. No external system is called for a withdrawal.") },
+  ]},
+  { name: "List withdrawals", steps: [
+    { on: ["client","mw","handler"], edge: ["client","mw","GET /api/user/withdrawals"], title: "Authenticated request",
+      text: S("No valid cookie → <span class='r warn'>401</span>.") },
+    { on: ["storage","pg"], edge: ["storage","pg","SELECT … ORDER BY processed_at DESC"], title: "Read",
+      text: S("Newest first.") },
+    { on: ["handler","client"], edge: ["handler","client","200 / 204"], title: "Answer",
+      text: S("None → <span class='r'>204</span>. Else <span class='r ok'>200</span>, <code>processed_at</code> in RFC3339.") },
+  ]},
+  { name: "Stop", steps: [
+    { on: ["config"], edge: null, title: "SIGINT / SIGTERM",
+      text: S("<code>signal.NotifyContext</code> cancels the context, as in metrics-alerting.") },
+    { on: ["config","mw"], edge: ["config","mw","Shutdown"], title: "HTTP server drains",
+      text: S("Stops accepting, waits for requests in flight up to a timeout.") },
+    { on: ["config","poller","aclient"], edge: ["config","poller","ctx done"], title: "Poller stops",
+      text: S("No new ticks; workers finish the request in flight; results already saved stay saved. Unfinished orders are still NEW/PROCESSING in the DB and are picked up after a restart.") },
+    { on: ["config","pg"], edge: ["config","pg","pool.Close"], title: "DB pool closes, exit 0",
+      text: S("") },
+  ]},
+];
+
+const baseEdges = [
+  ["client","mw"],["mw","handler"],["handler","service"],["service","storage"],["storage","pg"],
+  ["config","poller"],["poller","aclient"],["aclient","accrual"],["poller","storage"],
+];
+
+const topSvg = document.getElementById("edges"), base = document.getElementById("base");
+const board = document.getElementById("board");
+let cur = 0, step = 0;
+
+function center(r){ return {x: r.left + r.width/2, y: r.top + r.height/2}; }
+function clip(r, from, to){
+  // point where the segment center(r) → to leaves rect r
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const hw = r.width/2 + 4, hh = r.height/2 + 4;
+  const tx = dx === 0 ? Infinity : hw/Math.abs(dx), ty = dy === 0 ? Infinity : hh/Math.abs(dy);
+  const t = Math.min(tx, ty);
+  return {x: from.x + dx*t, y: from.y + dy*t};
+}
+function rectOf(id){
+  const b = board.getBoundingClientRect(), r = document.getElementById(id).getBoundingClientRect();
+  return {left: r.left - b.left, top: r.top - b.top, width: r.width, height: r.height};
+}
+function line(a, b, cls, label){
+  const svg = cls === "on" ? topSvg : base;
+  const ra = rectOf(a), rb = rectOf(b), ca = center(ra), cb = center(rb);
+  const p = clip(ra, ca, cb), q = clip(rb, cb, ca);
+  const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+  l.setAttribute("x1",p.x); l.setAttribute("y1",p.y); l.setAttribute("x2",q.x); l.setAttribute("y2",q.y);
+  l.setAttribute("class","edge " + cls);
+  if (cls === "on") l.setAttribute("marker-end","url(#ah)");
+  svg.appendChild(l);
+  if (label){
+    const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    const mx = (p.x+q.x)/2, my = (p.y+q.y)/2;
+    t.setAttribute("text-anchor","middle");
+    t.setAttribute("class","elabel");
+    t.textContent = label;
+    svg.appendChild(t);
+    const w = t.getComputedTextLength() + 12, h = 18;
+    if (Math.hypot(q.x - p.x, q.y - p.y) < w + 40) { t.remove(); return; } // short gap: label stays in the panel only
+    const x = Math.max(w/2 + 2, Math.min(mx, board.clientWidth - w/2 - 2));
+    t.setAttribute("x", x); t.setAttribute("y", my + 4);
+    const bg = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    bg.setAttribute("x", x - w/2); bg.setAttribute("y", my - h/2); bg.setAttribute("width", w); bg.setAttribute("height", h);
+    bg.setAttribute("class","lbg");
+    svg.insertBefore(bg, t);
+  }
+}
+function draw(){
+  [...document.querySelectorAll("#edges line,#edges text,#edges rect,#base line")].forEach(n => n.remove());
+  const s = scenarios[cur].steps[step];
+  baseEdges.forEach(([a,b]) => line(a,b,"",null));
+  if (s.edge) line(s.edge[0], s.edge[1], "on", s.edge[2] || null);
+}
+function render(){
+  const sc = scenarios[cur], s = sc.steps[step];
+  document.querySelectorAll(".box").forEach(b => b.classList.toggle("on", s.on.includes(b.id)));
+  document.querySelectorAll("#scen button").forEach((b,i) => b.setAttribute("aria-pressed", i === cur));
+  document.getElementById("count").textContent = `step ${step+1} of ${sc.steps.length}`;
+  document.getElementById("stepTitle").textContent = s.title;
+  document.getElementById("stepText").innerHTML = s.text;
+  const names = {client:"client",mw:"middleware",handler:"handler",service:"service",storage:"storage",pg:"PostgreSQL",
+    config:"main",poller:"poller",aclient:"accrual client",accrual:"accrual system"};
+  document.getElementById("stepEdge").textContent = s.edge ? `${names[s.edge[0]]} → ${names[s.edge[1]]}` + (s.edge[2] ? `: ${s.edge[2]}` : "") : "";
+  document.getElementById("prev").disabled = step === 0;
+  document.getElementById("next").disabled = step === sc.steps.length - 1;
+  const ol = document.getElementById("steps"); ol.innerHTML = "";
+  sc.steps.forEach((x,i) => { const li = document.createElement("li"); li.textContent = x.title;
+    if (i === step) li.className = "cur"; li.onclick = () => { step = i; render(); }; ol.appendChild(li); });
+  draw();
+}
+const scen = document.getElementById("scen");
+scenarios.forEach((s,i) => { const b = document.createElement("button"); b.type = "button";
+  b.textContent = `${i+1}. ${s.name}`; b.onclick = () => { cur = i; step = 0; render(); }; scen.appendChild(b); });
+document.getElementById("prev").onclick = () => { if (step > 0) { step--; render(); } };
+document.getElementById("next").onclick = () => { if (step < scenarios[cur].steps.length-1) { step++; render(); } };
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") document.getElementById("next").click();
+  else if (e.key === "ArrowLeft") document.getElementById("prev").click();
+  else if (/^[1-9]$/.test(e.key) && +e.key <= scenarios.length) { cur = +e.key - 1; step = 0; render(); }
+});
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === b.dataset.tab));
+  if (b.dataset.tab === "t-scheme") draw();
+});
+document.getElementById("theme").onclick = () => {
+  const r = document.documentElement, dark = getComputedStyle(r).getPropertyValue("--bg").trim() === "#15171b";
+  r.dataset.theme = dark ? "light" : "dark";
+};
+window.addEventListener("resize", draw);
+const params = new URLSearchParams(location.search);
+if (params.get("theme")) document.documentElement.dataset.theme = params.get("theme");
+if (params.get("tab")) document.querySelector(`nav.tabs button[data-tab="${params.get("tab")}"]`).click();
+if (params.get("s")) cur = Math.min(+params.get("s"), scenarios.length) - 1;
+if (params.get("k")) step = Math.min(+params.get("k"), scenarios[cur].steps.length) - 1;
+render();
+</script>
+</body>
+</html>
